@@ -1,5 +1,6 @@
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections import defaultdict
 
 import requests
 from bs4 import BeautifulSoup
@@ -77,14 +78,14 @@ def get_all_speeches():
     with open('/Users/egbert/projects/prez-speech/data/prez-speeches-urls.json', 'r') as file:
         prez_to_speech_urls = json.load(file)
     speech_urls = [url for urls in prez_to_speech_urls.values() for url in urls]
-    prez_to_speeches = {}
+    prez_to_speeches = defaultdict(list)
     with ThreadPoolExecutor() as executor:
         futures = [executor.submit(get_speech, speech_url) for speech_url in speech_urls]
         for future in as_completed(futures):
             try:
                 speech = future.result()
                 print(speech.get('president', 'Missing Prez'))
-                prez_to_speeches[speech.get('president', 'Missing Prez')] = speech
+                prez_to_speeches[speech.get('president', 'Missing Prez')].append(speech)
             except Exception as exc:
                 print(f'future failed because: {exc}')
 
