@@ -1,5 +1,5 @@
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
 from bs4 import BeautifulSoup
@@ -7,7 +7,8 @@ from bs4 import BeautifulSoup
 URL_SUFFIXES = ['washington', 'adams', 'jefferson', 'madison', 'monroe', 'jqadams', 'jackson', 'vanburen', 'harrison',
                 'tyler', 'polk', 'taylor', 'fillmore', 'pierce', 'buchanan', 'lincoln', 'johnson', 'grant', 'hayes',
                 'garfield', 'arthur', 'cleveland', 'bharrison', 'mckinley', 'roosevelt', 'taft',
-                'wilson', 'harding', 'coolidge', 'hoover', 'fdroosevelt', 'truman', 'eisenhower', 'kennedy', 'lbjohnson',
+                'wilson', 'harding', 'coolidge', 'hoover', 'fdroosevelt', 'truman', 'eisenhower', 'kennedy',
+                'lbjohnson',
                 'nixon', 'ford', 'carter', 'reagan', 'bush', 'clinton', 'gwbush', 'obama']
 
 MILLER_BASE_URL = 'https://millercenter.org'
@@ -27,10 +28,9 @@ def get_speech_collection_urls():
             except Exception as exc:
                 print(exc)
 
-    # Add Trump's in as it doesn't follow pattern
-    speech_urls['trump'] = 'https://millercenter.org/the-presidency/presidential-speeches'
     # Eisenhower's doesn't have the beginning of the url b/c why be consistent?
-    speech_urls['eisenhower'] = 'https://millercenter.org/the-presidency/presidential-speeches?field_president_target_id%5B0%5D=33&field_president_target_id%5B1%5D=33#selected-tags'
+    speech_urls[
+        'eisenhower'] = 'https://millercenter.org/the-presidency/presidential-speeches?field_president_target_id%5B0%5D=33&field_president_target_id%5B1%5D=33#selected-tags'
     return speech_urls
 
 
@@ -76,12 +76,20 @@ def _get_speech_urls(collection_url):
 def get_all_speeches():
     with open('/Users/egbert/projects/prez-speech/data/prez-speeches-urls.json', 'r') as file:
         prez_to_speech_urls = json.load(file)
-
+    speech_urls = [url for urls in prez_to_speech_urls.values() for url in urls]
     prez_to_speeches = {}
-    for prez, speech_urls in prez_to_speech_urls.items():
-        speeches = []
-        for speech_url in speech_urls:
-            speech = get_speech(speech_url)
+    with ThreadPoolExecutor() as executor:
+        futures = [executor.submit(get_speech, speech_url) for speech_url in speech_urls]
+        for future in as_completed(futures):
+            try:
+                speech = future.result()
+                print(speech.get('president', 'Missing Prez'))
+                prez_to_speeches[speech.get('president', 'Missing Prez')] = speech
+            except Exception as exc:
+                print(f'future failed because: {exc}')
+
+    with open('/Users/egbert/projects/prez-speech/data/prez-speeches-final.json', 'w') as file:
+        json.dump(prez_to_speeches, file)
 
 
 def get_speech(url):
@@ -100,12 +108,24 @@ def get_speech(url):
 
 def _get_speech_meta(page):
     meta_div = page.find('div', class_='about-this-episode')
-    president_name = meta_div.find('p', class_='president-name').text
-    date = meta_div.find('p', class_='episode-date').text
-    source = meta_div.find('span', class_='speech-loc').text
-    description = meta_div.find('p', id='description').text
+    president_name, date, source, description = '', '', '', ''
+    try:
+        president_name = meta_div.find('p', class_='president-name').text
+    except AttributeError:
+        pass
+    try:
+        date = meta_div.find('p', class_='episode-date').text
+    except AttributeError:
+        pass
+    try:
+        source = meta_div.find('span', class_='speech-loc').text
+    except AttributeError:
+        pass
+    try:
+        description = meta_div.find('p', id='description').text
+    except AttributeError:
+        pass
     return {'president': president_name, 'date': date, 'source': source, 'description': description}
-
 
 
 def main():
