@@ -1,3 +1,4 @@
+import csv
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import defaultdict
@@ -89,8 +90,16 @@ def get_all_speeches():
             except Exception as exc:
                 print(f'future failed because: {exc}')
 
-    with open('/Users/egbert/projects/prez-speech/data/prez-speeches-final.json', 'w') as file:
-        json.dump(prez_to_speeches, file)
+    # with open('/Users/egbert/projects/prez-speech/data/prez-speeches-final.json', 'w') as file:
+    #     json.dump(prez_to_speeches, file)
+
+    tidy_speeches = [sp for sps in prez_to_speeches.values() for sp in sps]
+    with open('/Users/egbert/projects/prez-speech/data/prez-speeches-final.csv', 'w', newline='') as csvfile:
+        fieldnames = ['president', 'date', 'source', 'description', 'transcript']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        for tidy_speech in tidy_speeches:
+            writer.writerow(tidy_speech)
 
 
 def get_speech(url):
