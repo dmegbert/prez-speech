@@ -1,5 +1,5 @@
 import csv
-from datetime import date, datetime
+from datetime import datetime
 import sys
 
 from psycopg2.extras import execute_values
