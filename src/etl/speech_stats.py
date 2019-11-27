@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 from statistics import median
 
@@ -8,7 +9,11 @@ from textblob import TextBlob
 from .utils import safe_cursor
 
 
-def get_speech_stats(speech):
+def get_speech_stats(speech_id):
+    with safe_cursor() as cur:
+        cur.execute('SELECT id, president_id, transcript FROM speeches WHERE id = %s', (speech_id,))
+        raw_speech = cur.fetchone()
+    speech = {'speech_id': raw_speech.id, 'president_id': raw_speech.president_id, 'speech': raw_speech.transcript}
     raw_text = speech['speech']
     sp_blob = TextBlob(raw_text)
     speech['polarity'], speech['subjectivity'] = sp_blob.sentiment
@@ -17,22 +22,21 @@ def get_speech_stats(speech):
     speech['median_sentence_length'] = median([len(sentence) for sentence in sp_blob.sentences])
     common_words = get_top_n_words([raw_text], 50, (1, 1))
     speech['top_50_words'] = json.dumps(common_words)
-    speech['grade_reading_level'] = textstat.text_standard(raw_text, float_output=True)
+    speech['grade_reading_level'] = textstat.coleman_liau_index(raw_text)
     return speech
 
 
 def get_speeches():
-    for speech_id in range(1, 1022):
-        print(speech_id)
-        with safe_cursor() as cur:
-            cur.execute('SELECT id, president_id, transcript FROM speeches WHERE id = %s', (speech_id,))
-            raw_speech = cur.fetchone()
-        speech = {'speech_id': raw_speech.id, 'president_id': raw_speech.president_id, 'speech': raw_speech.transcript}
-        speech_stats = get_speech_stats(speech)
-        load_speech_stats(speech_stats)
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(get_speech_stats, speech_id) for speech_id in range(1, 1022)]
+        for future in as_completed(futures):
+            try:
+                load_speech_stats(future.result())
+            except Exception as exc:
+                print(exc)
 
 
-def load_speech_stats(stats):
+def load_speech_stats(stats, ngrams):
     with safe_cursor() as cur:
         cur.execute(
             'INSERT INTO speech_stats'
@@ -51,10 +55,3 @@ def get_top_n_words(corpus, n=20, ngram_range=(1, 1)):
     words_freq = [(word, int(sum_words[0, idx])) for word, idx in vec.vocabulary_.items()]
     words_freq = sorted(words_freq, key=lambda x: x[1], reverse=True)
     return words_freq[:n]
-
-# Reading level
-# # Word count
-# # Sentence count
-# # Median Sentence length
-# # Sentiment Analysis
-# 100 most frequent uni/bi/tri grams
