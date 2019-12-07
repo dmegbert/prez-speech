@@ -2,6 +2,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 from statistics import median
 
+from psycopg2.extras import execute_values
 import textstat
 from sklearn.feature_extraction.text import CountVectorizer
 from textblob import TextBlob
@@ -21,9 +22,14 @@ def get_speech_stats(speech_id):
     speech['sentence_count'] = len(sp_blob.sentences)
     speech['median_sentence_length'] = median([len(sentence) for sentence in sp_blob.sentences])
     common_words = get_top_n_words([raw_text], 50, (1, 1))
-    speech['top_50_words'] = json.dumps(common_words)
+    unigrams_dict = _format_unigrams(common_words, speech['president_id'], speech['speech_id'])
     speech['grade_reading_level'] = textstat.coleman_liau_index(raw_text)
-    return speech
+    return speech, unigrams_dict
+
+
+def _format_unigrams(common_words, president_id, speech_id):
+    speech_constants = {'president_id': president_id, 'speech_id': speech_id}
+    return [{'unigram': word, 'count': ct, **speech_constants} for word, ct in common_words]
 
 
 def get_speeches():
@@ -36,16 +42,28 @@ def get_speeches():
                 print(exc)
 
 
-def load_speech_stats(stats, ngrams):
+def load_speech_stats(stats_and_unigrams):
+    stats, unigrams = stats_and_unigrams
+    with safe_cursor() as cur_2:
+        execute_values(
+            cur_2,
+            'INSERT INTO unigrams'
+            '(president_id, speech_id, unigram, occurrence)'
+            'VALUES %s',
+            unigrams,
+            '(%(president_id)s, %(speech_id)s, %(unigram)s, %(count)s)'
+        )
     with safe_cursor() as cur:
         cur.execute(
             'INSERT INTO speech_stats'
             '(speech_id, polarity, subjectivity, word_count,'
-            'sentence_count, top_50_words, president_id, grade_reading_level) '
+            'sentence_count, president_id, grade_reading_level) '
             'VALUES (%(speech_id)s, %(polarity)s, %(subjectivity)s,'
-            '%(word_count)s, %(sentence_count)s, %(top_50_words)s, %(president_id)s, %(grade_reading_level)s)',
+            '%(word_count)s, %(sentence_count)s, %(president_id)s, %(grade_reading_level)s)',
             stats
         )
+
+
 
 
 def get_top_n_words(corpus, n=20, ngram_range=(1, 1)):
