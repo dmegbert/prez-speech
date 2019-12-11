@@ -1,5 +1,4 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import json
 from statistics import median
 
 from psycopg2.extras import execute_values
@@ -7,7 +6,7 @@ import textstat
 from sklearn.feature_extraction.text import CountVectorizer
 from textblob import TextBlob
 
-from .utils import safe_cursor
+from src.db_utils import safe_cursor
 
 
 def get_speech_stats(speech_id):

@@ -5,7 +5,7 @@ import sys
 from psycopg2.extras import execute_values
 from unidecode import unidecode
 
-from .utils import safe_cursor
+from src.db_utils import safe_cursor
 
 csv.field_size_limit(sys.maxsize)
 

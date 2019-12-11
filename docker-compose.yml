@@ -4,7 +4,7 @@ services:
     env_file:
       - .env
     image: "postgres"
-    container_name: "pg_db"
+    container_name: "prez_pg_db"
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
